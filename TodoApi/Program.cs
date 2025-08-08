@@ -11,7 +11,6 @@ builder.Services.AddOpenApi();
 var cs = builder.Configuration.GetConnectionString("Default")!;
 
 var app = builder.Build();
-var dbpassword = "123456";
 
 app.MapOpenApi();
 
