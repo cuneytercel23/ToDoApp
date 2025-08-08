@@ -1,0 +1,105 @@
+trigger:
+- main
+
+pool:
+  name: 'webapppool'
+
+variables:
+  - group: Myappsecrets  # SONAR_TOKEN, DOCKERHUB_USERNAME, DOCKERHUB_PASSWORD
+
+stages:
+
+# =====================================================================
+# 1) Statik Analiz: OWASP + SonarQube
+# =====================================================================
+- stage: StaticAnalysis
+  displayName: 'OWASP + SonarScanner'
+  jobs:
+  - job: StaticAnalysisJob
+    displayName: 'Run OWASP & SonarQube Analysis'
+    steps:
+    - checkout: self
+
+    - task: Kubernetes@1
+      displayName: "List Kubernetes Nodes"
+      inputs:
+        connectionType: 'Kubernetes Service Connection'
+        kubernetesServiceEndpoint: 'kub-sc'
+        command: 'get'
+        arguments: 'nodes -o wide'
+
+    # OWASP Dependency-Check
+    - script: |
+        mkdir -p $(Build.ArtifactStagingDirectory)/owasp
+        chmod -R 777 $(Build.ArtifactStagingDirectory)/owasp
+
+        docker run --rm \
+          -v $(Build.SourcesDirectory):/src:ro \
+          -v $(Build.ArtifactStagingDirectory)/owasp:/reports \
+          -v /opt/dependency-check-data:/usr/share/dependency-check/data \
+          owasp/dependency-check:latest \
+          --scan /src \
+          --format ALL \
+          --project "$(Build.Repository.Name)" \
+          --out /reports
+      displayName: 'Run OWASP Dependency-Check'
+
+    # Publish OWASP Reports
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish OWASP Reports'
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)/owasp'
+        ArtifactName: 'dependency-check-report'
+
+    # SonarScanner CLI (Quality Gate wait)
+    - script: |
+        /opt/sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner \
+          -Dsonar.login=$(SONAR_TOKEN) \
+          -Dsonar.qualitygate.wait=true \
+          -X
+      displayName: 'Run SonarScanner'
+
+# =====================================================================
+# 2) Build + Trivy Scan + Push
+# =====================================================================
+- stage: BuildScanPush
+  displayName: 'Docker Build + Trivy Scan + Push'
+  dependsOn: StaticAnalysis
+  jobs:
+  - job: BuildScanPushJob
+    displayName: 'Build, Scan and Push Image'
+    steps:
+    - checkout: self
+
+    # Build Docker Image (Dockerfile is in TodoApi folder)
+    - script: |
+        IMAGE_NAME=todo-api
+        IMAGE_TAG=$(Build.BuildId)
+        docker build -t $IMAGE_NAME:$IMAGE_TAG ./TodoApi
+      displayName: 'Build Docker Image'
+
+    # Trivy Image Scan
+    - script: |
+        IMAGE_NAME=todo-api
+        IMAGE_TAG=$(Build.BuildId)
+        echo "Scanning $IMAGE_NAME:$IMAGE_TAG"
+        trivy image --exit-code 1 --severity CRITICAL,HIGH $IMAGE_NAME:$IMAGE_TAG
+        trivy image --format json --output $(Build.ArtifactStagingDirectory)/trivy-report.json $IMAGE_NAME:$IMAGE_TAG
+      displayName: 'Trivy Image Scan - FAIL on CRITICAL/HIGH'
+
+    # Publish Trivy Report
+    - task: PublishBuildArtifacts@1
+      displayName: 'Publish Trivy Report'
+      inputs:
+        PathtoPublish: '$(Build.ArtifactStagingDirectory)/trivy-report.json'
+        ArtifactName: 'trivy-report'
+
+    # Push Docker Image to Docker Hub
+    - script: |
+        IMAGE_NAME=todo-api
+        IMAGE_TAG=$(Build.BuildId)
+        echo $(DOCKERHUB_PASSWORD) | docker login -u $(DOCKERHUB_USERNAME) --password-stdin
+        DOCKERHUB_REPO=$(DOCKERHUB_USERNAME)/$IMAGE_NAME
+        docker tag $IMAGE_NAME:$IMAGE_TAG $DOCKERHUB_REPO:$IMAGE_TAG
+        docker push $DOCKERHUB_REPO:$IMAGE_TAG
+      displayName: 'Push Docker Image to Docker Hub'
