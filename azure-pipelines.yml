@@ -9,7 +9,7 @@ variables:
 
 stages:
   # =====================================================================
-  # 1) Statik Analiz: OWASP + SonarQube (.NET Scanner, agent'ta kurulu)
+  # 1) Statik Analiz: OWASP + SonarQube 
   # =====================================================================
   - stage: StaticAnalysis
     displayName: "OWASP + SonarQube (.NET Scanner)"
@@ -19,7 +19,7 @@ stages:
         steps:
           - checkout: self
 
-          # SonarScanner for .NET (begin) - agent'ta 'dotnet-sonarscanner' kurulu olmalı
+          # SonarScanner for .NET (begin) 
           - script: |
               dotnet-sonarscanner begin \
                 /k:"MyTodoApi" \
@@ -40,7 +40,7 @@ stages:
               dotnet-sonarscanner end /d:sonar.login="$(SONAR_TOKEN)"
             displayName: "SonarQube End (Analyze & Upload)"
 
-          # OWASP Dependency-Check (dokunulmadı)
+          # OWASP Dependency-Check
           - script: |
               mkdir -p $(Build.ArtifactStagingDirectory)/owasp
               chmod -R 777 $(Build.ArtifactStagingDirectory)/owasp
@@ -63,7 +63,7 @@ stages:
               ArtifactName: "dependency-check-report"
 
   # =====================================================================
-  # 2) Build + Trivy Scan + Push (dokunulmadı)
+  # 2) Build + Trivy Scan + Push 
   # =====================================================================
   - stage: BuildScanPush
     displayName: "Docker Build + Trivy Scan + Push"
@@ -104,7 +104,7 @@ stages:
             displayName: "Push Docker Image to Docker Hub"
 
   # =====================================================================
-  # 3) Deploy to Kubernetes (Helm) - no installer
+  # 3) Deploy to Kubernetes (Helm)
   # =====================================================================
   - stage: Deploy
     displayName: "Helm Upgrade (manifests/)"
@@ -114,11 +114,11 @@ stages:
       IMAGE_NAME: "todo-api"
       IMAGE_TAG: "$(Build.BuildId)"
       K8S_NAMESPACE: "stage"
-      RELEASE_NAME: "todoapi" # Helm release adı
+      RELEASE_NAME: "todoapi" 
       DOCKERHUB_REPO: "$(DOCKERHUB_USERNAME)/$(IMAGE_NAME)"
     jobs:
       - job: DeployJob
-        displayName: "Helm Upgrade"
+        displayName: "Helm Deploy"
         steps:
           - checkout: self
 
@@ -135,3 +135,22 @@ stages:
               install: true
               arguments: >
                 --set image.tag=$(IMAGE_TAG)
+
+          # - script: |
+          #     # Git user bilgilerini ayarla 
+          #     git config user.email "devops-bot@example.com"
+          #     git config user.name "DevOps Bot"
+
+          #     # Branch checkout
+          #     git checkout $(Build.SourceBranchName)
+
+          #     # Değişiklikleri ekle 
+          #     git add manifests/values.yaml
+
+          #     # Commit mesajı
+          #     git commit -m "Update image.tag to $(IMAGE_TAG) in values.yaml [skip ci]" || echo "No changes to commit"
+
+          #     # Push
+          #     git push origin $(Build.SourceBranchName)
+          #   displayName: "Commit & Push updated values.yaml"
+
