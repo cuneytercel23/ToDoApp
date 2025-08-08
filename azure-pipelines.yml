@@ -11,56 +11,56 @@ stages:
   # =====================================================================
   # 1) Statik Analiz: OWASP + SonarQube (.NET Scanner, agent'ta kurulu)
   # =====================================================================
-  # - stage: StaticAnalysis
-  #   displayName: "OWASP + SonarQube (.NET Scanner)"
-  #   jobs:
-  #     - job: StaticAnalysisJob
-  #       displayName: "Run OWASP & SonarQube Analysis"
-  #       steps:
-  #         - checkout: self
+  - stage: StaticAnalysis
+    displayName: "OWASP + SonarQube (.NET Scanner)"
+    jobs:
+      - job: StaticAnalysisJob
+        displayName: "Run OWASP & SonarQube Analysis"
+        steps:
+          - checkout: self
 
-  #         # SonarScanner for .NET (begin) - agent'ta 'dotnet-sonarscanner' kurulu olmalı
-  #         - script: |
-  #             dotnet-sonarscanner begin \
-  #               /k:"MyTodoApi" \
-  #               /n:"MyTodoApi" \
-  #               /d:sonar.host.url="http://localhost:9000" \
-  #               /d:sonar.login="$(SONAR_TOKEN)" \
-  #               /d:sonar.sourceEncoding="UTF-8" \
-  #               /d:sonar.exclusions=".vs/**,bin/**,obj/**,Properties/**,**/*.json,**/*.http,**/*.yml,**/Dockerfile,**/*.user" \
-  #               /d:sonar.qualitygate.wait=false
-  #           displayName: "SonarQube Begin"
+          # SonarScanner for .NET (begin) - agent'ta 'dotnet-sonarscanner' kurulu olmalı
+          - script: |
+              dotnet-sonarscanner begin \
+                /k:"MyTodoApi" \
+                /n:"MyTodoApi" \
+                /d:sonar.host.url="http://localhost:9000" \
+                /d:sonar.login="$(SONAR_TOKEN)" \
+                /d:sonar.sourceEncoding="UTF-8" \
+                /d:sonar.exclusions=".vs/**,bin/**,obj/**,Properties/**,**/*.json,**/*.http,**/*.yml,**/Dockerfile,**/*.user" \
+                /d:sonar.qualitygate.wait=false
+            displayName: "SonarQube Begin"
 
-  #         - script: |
-  #             dotnet restore ./TodoApi.sln
-  #             dotnet build ./TodoApi.sln --configuration Release --no-restore
-  #           displayName: 'DotNet Build'
+          - script: |
+              dotnet restore ./TodoApi.sln
+              dotnet build ./TodoApi.sln --configuration Release --no-restore
+            displayName: 'DotNet Build'
 
-  #         - script: |
-  #             dotnet-sonarscanner end /d:sonar.login="$(SONAR_TOKEN)"
-  #           displayName: "SonarQube End (Analyze & Upload)"
+          - script: |
+              dotnet-sonarscanner end /d:sonar.login="$(SONAR_TOKEN)"
+            displayName: "SonarQube End (Analyze & Upload)"
 
-  #         # OWASP Dependency-Check (dokunulmadı)
-  #         - script: |
-  #             mkdir -p $(Build.ArtifactStagingDirectory)/owasp
-  #             chmod -R 777 $(Build.ArtifactStagingDirectory)/owasp
+          # OWASP Dependency-Check (dokunulmadı)
+          - script: |
+              mkdir -p $(Build.ArtifactStagingDirectory)/owasp
+              chmod -R 777 $(Build.ArtifactStagingDirectory)/owasp
 
-  #             docker run --rm \
-  #               -v $(Build.SourcesDirectory):/src:ro \
-  #               -v $(Build.ArtifactStagingDirectory)/owasp:/reports \
-  #               -v /opt/dependency-check-data:/usr/share/dependency-check/data \
-  #               owasp/dependency-check:latest \
-  #               --scan /src \
-  #               --format ALL \
-  #               --project "$(Build.Repository.Name)" \
-  #               --out /reports
-  #           displayName: "Run OWASP Dependency-Check"
+              docker run --rm \
+                -v $(Build.SourcesDirectory):/src:ro \
+                -v $(Build.ArtifactStagingDirectory)/owasp:/reports \
+                -v /opt/dependency-check-data:/usr/share/dependency-check/data \
+                owasp/dependency-check:latest \
+                --scan /src \
+                --format ALL \
+                --project "$(Build.Repository.Name)" \
+                --out /reports
+            displayName: "Run OWASP Dependency-Check"
 
-  #         - task: PublishBuildArtifacts@1
-  #           displayName: "Publish OWASP Reports"
-  #           inputs:
-  #             PathtoPublish: "$(Build.ArtifactStagingDirectory)/owasp"
-  #             ArtifactName: "dependency-check-report"
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish OWASP Reports"
+            inputs:
+              PathtoPublish: "$(Build.ArtifactStagingDirectory)/owasp"
+              ArtifactName: "dependency-check-report"
 
   # =====================================================================
   # 2) Build + Trivy Scan + Push (dokunulmadı)
