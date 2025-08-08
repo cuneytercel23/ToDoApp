@@ -27,7 +27,7 @@ app.MapGet("/", () => Results.Ok(new { status = "ok" }));
 // LISTE
 app.MapGet("/todos", async (ILogger<Program> logger) =>
 {
-    logger.LogInformation("GET /todos isteği geldi");
+    logger.LogInformation("GET /todos isteği geldi2");
 
     await using var conn = new NpgsqlConnection(cs);
     var items = await conn.QueryAsync<Todo>(
