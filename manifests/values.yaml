@@ -22,11 +22,11 @@ service:
   targetPort: 8080
   nodePort: 30080
 
-# Vault configuration
-# vault:
-#   enabled: true
-#   role: "kubernetes-role"
-#   secretPath: "secret/data/stage-preview-manager-service"
+#Vault configuration
+vault:
+  enabled: false
+  # role: "kubernetes-role"
+  # secretPath: "secret/data/stage-preview-manager-service"
 
 strategy:
   type: RollingUpdate
