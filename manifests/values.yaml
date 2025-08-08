@@ -67,8 +67,8 @@ resources:
 #     timeoutSeconds: 5
 #     failureThreshold: 3
 
-# ingress:
-#   enabled: true
+ingress:
+  enabled: false
 #   className: "alb"
 #   annotations:
 #     kubernetes.io/ingress.class: alb
