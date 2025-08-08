@@ -44,8 +44,8 @@ resources:
     cpu: 100m
     memory: 512Mi
 
-# healthChecks:
-#   enabled: true
+healthChecks:
+  enabled: false
 #   livenessProbe:
 #     httpGet:
 #       path: /api/preview-manager/health
