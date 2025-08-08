@@ -5,27 +5,43 @@ pool:
   name: 'webapppool'
 
 variables:
-  - group: Myappsecrets  # SONAR_TOKEN, DOCKERHUB_USERNAME, DOCKERHUB_PASSWORD
+  - group: Myappsecrets  # SONAR_TOKEN, SONAR_HOST_URL, DOCKERHUB_USERNAME, DOCKERHUB_PASSWORD
 
 stages:
 
 # =====================================================================
-# 1) Statik Analiz: OWASP + SonarQube
+# 1) Statik Analiz: OWASP + SonarQube (.NET Scanner, agent'ta kurulu)
 # =====================================================================
 - stage: StaticAnalysis
-  displayName: 'OWASP + SonarScanner'
+  displayName: 'OWASP + SonarQube (.NET Scanner)'
   jobs:
   - job: StaticAnalysisJob
     displayName: 'Run OWASP & SonarQube Analysis'
     steps:
     - checkout: self
 
+    # SonarScanner for .NET (begin) - agent'ta 'dotnet-sonarscanner' kurulu olmalı
+    - script: |
+        dotnet-sonarscanner begin \
+          /k:"MyTodoApi" \
+          /n:"MyTodoApi" \
+          /d:sonar.host.url="http://localhost:9000" \
+          /d:sonar.login="$(SONAR_TOKEN)" \
+          /d:sonar.sourceEncoding="UTF-8" \
+          /d:sonar.exclusions=".vs/**,bin/**,obj/**,Properties/**,**/*.json,**/*.http,**/*.yml,**/Dockerfile,**/*.user" \
+          /d:sonar.qualitygate.wait=true
+      displayName: 'SonarQube Begin'
+
     - script: |
         dotnet restore ./TodoApi.sln
         dotnet build ./TodoApi.sln --configuration Release --no-restore
       displayName: 'DotNet Build'
 
-    # OWASP Dependency-Check
+    - script: |
+        dotnet-sonarscanner end /d:sonar.login="$(SONAR_TOKEN)"
+      displayName: 'SonarQube End (Analyze & Upload)'
+
+    # OWASP Dependency-Check (dokunulmadı)
     - script: |
         mkdir -p $(Build.ArtifactStagingDirectory)/owasp
         chmod -R 777 $(Build.ArtifactStagingDirectory)/owasp
@@ -41,23 +57,14 @@ stages:
           --out /reports
       displayName: 'Run OWASP Dependency-Check'
 
-    # Publish OWASP Reports
     - task: PublishBuildArtifacts@1
       displayName: 'Publish OWASP Reports'
       inputs:
         PathtoPublish: '$(Build.ArtifactStagingDirectory)/owasp'
         ArtifactName: 'dependency-check-report'
 
-    # SonarScanner CLI (Quality Gate wait)
-    - script: |
-        /opt/sonar-scanner-5.0.1.3006-linux/bin/sonar-scanner \
-          -Dsonar.login=$(SONAR_TOKEN) \
-          -Dsonar.qualitygate.wait=true \
-          -X
-      displayName: 'Run SonarScanner'
-
 # =====================================================================
-# 2) Build + Trivy Scan + Push
+# 2) Build + Trivy Scan + Push (dokunulmadı)
 # =====================================================================
 - stage: BuildScanPush
   displayName: 'Docker Build + Trivy Scan + Push'
@@ -68,14 +75,12 @@ stages:
     steps:
     - checkout: self
 
-    # Build Docker Image (Dockerfile is in TodoApi folder)
     - script: |
         IMAGE_NAME=todo-api
         IMAGE_TAG=$(Build.BuildId)
         docker build -t $IMAGE_NAME:$IMAGE_TAG ./TodoApi
       displayName: 'Build Docker Image'
 
-    # Trivy Image Scan
     - script: |
         IMAGE_NAME=todo-api
         IMAGE_TAG=$(Build.BuildId)
@@ -84,14 +89,12 @@ stages:
         trivy image --format json --output $(Build.ArtifactStagingDirectory)/trivy-report.json $IMAGE_NAME:$IMAGE_TAG
       displayName: 'Trivy Image Scan - FAIL on CRITICAL/HIGH'
 
-    # Publish Trivy Report
     - task: PublishBuildArtifacts@1
       displayName: 'Publish Trivy Report'
       inputs:
         PathtoPublish: '$(Build.ArtifactStagingDirectory)/trivy-report.json'
         ArtifactName: 'trivy-report'
 
-    # Push Docker Image to Docker Hub
     - script: |
         IMAGE_NAME=todo-api
         IMAGE_TAG=$(Build.BuildId)
