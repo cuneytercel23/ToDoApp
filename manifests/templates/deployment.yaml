@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.app.name }}-deployment
+  namespace: {{ .Values.app.namespace }}
+  labels:
+    app: {{ .Values.app.name }}
+    chart: {{ include "chart.name" . }}
+    release: {{ .Release.Name }}
+    heritage: {{ .Release.Service }}
+spec:
+  progressDeadlineSeconds: {{ .Values.deployment.progressDeadlineSeconds }}
+  replicas: {{ .Values.app.replicas }}
+  revisionHistoryLimit: {{ .Values.deployment.revisionHistoryLimit }}
+  selector:
+    matchLabels:
+      app: {{ .Values.app.name }}
+      release: {{ .Release.Name }}
+  strategy:
+    {{- if eq .Values.strategy.type "RollingUpdate" }}
+    rollingUpdate:
+      maxSurge: {{ .Values.strategy.rollingUpdate.maxSurge }}
+      maxUnavailable: {{ .Values.strategy.rollingUpdate.maxUnavailable }}
+    {{- end }}
+    type: {{ .Values.strategy.type }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.app.name }}
+        release: {{ .Release.Name }}
+      {{- if .Values.vault.enabled }}
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: {{ .Values.vault.role | quote }}
+        vault.hashicorp.com/agent-inject-secret-env: {{ .Values.vault.secretPath | quote }}
+        vault.hashicorp.com/agent-inject-template-env: |
+          {{`{{- with secret`}} {{ .Values.vault.secretPath | quote }} {{`-}}`}}
+          {{`{{- range $k, $v := .Data.data }}`}}
+          export {{`{{ $k }}`}}="{{`{{ $v }}`}}"
+          {{`{{- end }}`}}
+          {{`{{- end }}`}}
+      {{- end }}
+    spec:
+      containers:
+        - name: {{ .Values.container.name }}
+          image: {{ .Values.image.repository }}:{{ .Values.image.tag }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- if .Values.container.command }}
+          command: {{ .Values.container.command | toJson }}
+          {{- end }}
+          {{- if .Values.container.args }}
+          args: {{ .Values.container.args | toJson }}
+          {{- end }}
+          ports:
+            - containerPort: {{ .Values.container.targetPort }}
+              protocol: TCP
+          {{- if .Values.resources.enabled }}
+          resources:
+            requests:
+              cpu: {{ .Values.resources.requests.cpu }}
+              memory: {{ .Values.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.resources.limits.cpu }}
+              memory: {{ .Values.resources.limits.memory }}
+          {{- end }}
+          {{- if .Values.healthChecks.enabled }}
+          livenessProbe:
+            failureThreshold: {{ .Values.healthChecks.livenessProbe.failureThreshold }}
+            httpGet:
+              path: {{ .Values.healthChecks.livenessProbe.httpGet.path }}
+              port: {{ .Values.healthChecks.livenessProbe.httpGet.port }}
+              scheme: {{ .Values.healthChecks.livenessProbe.httpGet.scheme }}
+            initialDelaySeconds: {{ .Values.healthChecks.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthChecks.livenessProbe.periodSeconds }}
+            successThreshold: {{ .Values.healthChecks.livenessProbe.successThreshold }}
+            timeoutSeconds: {{ .Values.healthChecks.livenessProbe.timeoutSeconds }}
+          readinessProbe:
+            failureThreshold: {{ .Values.healthChecks.readinessProbe.failureThreshold }}
+            httpGet:
+              path: {{ .Values.healthChecks.readinessProbe.httpGet.path }}
+              port: {{ .Values.healthChecks.readinessProbe.httpGet.port }}
+              scheme: {{ .Values.healthChecks.readinessProbe.httpGet.scheme }}
+            initialDelaySeconds: {{ .Values.healthChecks.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.healthChecks.readinessProbe.periodSeconds }}
+            successThreshold: {{ .Values.healthChecks.readinessProbe.successThreshold }}
+            timeoutSeconds: {{ .Values.healthChecks.readinessProbe.timeoutSeconds }}
+          {{- end }}
+          terminationMessagePath: /dev/termination-log
+          terminationMessagePolicy: File
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      terminationGracePeriodSeconds: {{ .Values.deployment.terminationGracePeriodSeconds }}

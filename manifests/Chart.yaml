@@ -1,0 +1,17 @@
+apiVersion: v2
+name: microservice-deployment
+description: A Helm chart for deploying microservices with Vault integration
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - microservice
+  - deployment
+  - vault
+  - kubernetes
+home: https://github.com/your-org/helm-charts
+sources:
+  - https://github.com/your-org/helm-charts
+maintainers:
+  - name: Your Name
+    email: your.email@company.com

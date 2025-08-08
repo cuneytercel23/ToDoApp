@@ -1,0 +1,97 @@
+app:
+  name: todo-api
+  namespace: stage
+  replicas: 1
+  
+image:
+  repository: cuneytercel09/todo-api
+  tag: "1.0.0"
+  pullPolicy: Always
+
+container:
+  name: todo-api
+  port: 80
+  targetPort: 8080
+  command: []
+  args: []
+
+service:
+  enabled: true
+  type: NodePort
+  port: 80
+  targetPort: 8080
+  nodePort: 30080
+
+# Vault configuration
+# vault:
+#   enabled: true
+#   role: "kubernetes-role"
+#   secretPath: "secret/data/stage-preview-manager-service"
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 25%
+    maxUnavailable: 25%
+
+
+resources:
+  enabled: true
+  requests:
+    cpu: 32m
+    memory: 128Mi
+  limits:
+    cpu: 100m
+    memory: 512Mi
+
+# healthChecks:
+#   enabled: true
+#   livenessProbe:
+#     httpGet:
+#       path: /api/preview-manager/health
+#       port: 3000
+#       scheme: HTTP
+#     initialDelaySeconds: 30
+#     periodSeconds: 10
+#     successThreshold: 1
+#     timeoutSeconds: 5
+#     failureThreshold: 3
+#   readinessProbe:
+#     httpGet:
+#       path: /api/preview-manager/health
+#       port: 3000
+#       scheme: HTTP
+#     initialDelaySeconds: 30
+#     periodSeconds: 10
+#     successThreshold: 1
+#     timeoutSeconds: 5
+#     failureThreshold: 3
+
+# ingress:
+#   enabled: true
+#   className: "alb"
+#   annotations:
+#     kubernetes.io/ingress.class: alb
+#     alb.ingress.kubernetes.io/scheme: internet-facing
+#     alb.ingress.kubernetes.io/target-type: ip
+#     alb.ingress.kubernetes.io/group.name: "mindbricks-backend-group-ingress"
+#     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+#     alb.ingress.kubernetes.io/ssl-redirect: '443'
+#     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-2:455385744192:certificate/ce1c0ccb-29f6-4d54-aa33-c7311f98d66a
+#   hosts:
+#     - host: stage.mindbricks.com
+#       paths:
+#         - path: /api/preview-manager
+#           pathType: Prefix
+
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 4
+  targetCPUUtilizationPercentage: 85
+  targetMemoryUtilizationPercentage: 75
+
+deployment:
+  progressDeadlineSeconds: 600
+  revisionHistoryLimit: 5
+  terminationGracePeriodSeconds: 30

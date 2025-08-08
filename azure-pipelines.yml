@@ -1,105 +1,138 @@
 trigger:
-- main
+  - main
 
 pool:
-  name: 'webapppool'
+  name: "webapppool"
 
 variables:
-  - group: Myappsecrets  # SONAR_TOKEN, SONAR_HOST_URL, DOCKERHUB_USERNAME, DOCKERHUB_PASSWORD
+  - group: Myappsecrets # SONAR_TOKEN, SONAR_HOST_URL, DOCKERHUB_USERNAME, DOCKERHUB_PASSWORD
 
 stages:
+  # =====================================================================
+  # 1) Statik Analiz: OWASP + SonarQube (.NET Scanner, agent'ta kurulu)
+  # =====================================================================
+  - stage: StaticAnalysis
+    displayName: "OWASP + SonarQube (.NET Scanner)"
+    jobs:
+      - job: StaticAnalysisJob
+        displayName: "Run OWASP & SonarQube Analysis"
+        steps:
+          - checkout: self
 
-# =====================================================================
-# 1) Statik Analiz: OWASP + SonarQube (.NET Scanner, agent'ta kurulu)
-# =====================================================================
-- stage: StaticAnalysis
-  displayName: 'OWASP + SonarQube (.NET Scanner)'
-  jobs:
-  - job: StaticAnalysisJob
-    displayName: 'Run OWASP & SonarQube Analysis'
-    steps:
-    - checkout: self
+          # SonarScanner for .NET (begin) - agent'ta 'dotnet-sonarscanner' kurulu olmalı
+          - script: |
+              dotnet-sonarscanner begin \
+                /k:"MyTodoApi" \
+                /n:"MyTodoApi" \
+                /d:sonar.host.url="http://localhost:9000" \
+                /d:sonar.login="$(SONAR_TOKEN)" \
+                /d:sonar.sourceEncoding="UTF-8" \
+                /d:sonar.exclusions=".vs/**,bin/**,obj/**,Properties/**,**/*.json,**/*.http,**/*.yml,**/Dockerfile,**/*.user" \
+                /d:sonar.qualitygate.wait=false
+            displayName: "SonarQube Begin"
 
-    # SonarScanner for .NET (begin) - agent'ta 'dotnet-sonarscanner' kurulu olmalı
-    - script: |
-        dotnet-sonarscanner begin \
-          /k:"MyTodoApi" \
-          /n:"MyTodoApi" \
-          /d:sonar.host.url="http://localhost:9000" \
-          /d:sonar.login="$(SONAR_TOKEN)" \
-          /d:sonar.sourceEncoding="UTF-8" \
-          /d:sonar.exclusions=".vs/**,bin/**,obj/**,Properties/**,**/*.json,**/*.http,**/*.yml,**/Dockerfile,**/*.user" \
-          /d:sonar.qualitygate.wait=false
-      displayName: 'SonarQube Begin'
+          # - script: |
+          #     dotnet restore ./TodoApi.sln
+          #     dotnet build ./TodoApi.sln --configuration Release --no-restore
+          #   displayName: 'DotNet Build'
 
-    - script: |
-        dotnet restore ./TodoApi.sln
-        dotnet build ./TodoApi.sln --configuration Release --no-restore
-      displayName: 'DotNet Build'
+          - script: |
+              dotnet-sonarscanner end /d:sonar.login="$(SONAR_TOKEN)"
+            displayName: "SonarQube End (Analyze & Upload)"
 
-    - script: |
-        dotnet-sonarscanner end /d:sonar.login="$(SONAR_TOKEN)"
-      displayName: 'SonarQube End (Analyze & Upload)'
+          # OWASP Dependency-Check (dokunulmadı)
+          - script: |
+              mkdir -p $(Build.ArtifactStagingDirectory)/owasp
+              chmod -R 777 $(Build.ArtifactStagingDirectory)/owasp
 
-    # OWASP Dependency-Check (dokunulmadı)
-    - script: |
-        mkdir -p $(Build.ArtifactStagingDirectory)/owasp
-        chmod -R 777 $(Build.ArtifactStagingDirectory)/owasp
+              docker run --rm \
+                -v $(Build.SourcesDirectory):/src:ro \
+                -v $(Build.ArtifactStagingDirectory)/owasp:/reports \
+                -v /opt/dependency-check-data:/usr/share/dependency-check/data \
+                owasp/dependency-check:latest \
+                --scan /src \
+                --format ALL \
+                --project "$(Build.Repository.Name)" \
+                --out /reports
+            displayName: "Run OWASP Dependency-Check"
 
-        docker run --rm \
-          -v $(Build.SourcesDirectory):/src:ro \
-          -v $(Build.ArtifactStagingDirectory)/owasp:/reports \
-          -v /opt/dependency-check-data:/usr/share/dependency-check/data \
-          owasp/dependency-check:latest \
-          --scan /src \
-          --format ALL \
-          --project "$(Build.Repository.Name)" \
-          --out /reports
-      displayName: 'Run OWASP Dependency-Check'
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish OWASP Reports"
+            inputs:
+              PathtoPublish: "$(Build.ArtifactStagingDirectory)/owasp"
+              ArtifactName: "dependency-check-report"
 
-    - task: PublishBuildArtifacts@1
-      displayName: 'Publish OWASP Reports'
-      inputs:
-        PathtoPublish: '$(Build.ArtifactStagingDirectory)/owasp'
-        ArtifactName: 'dependency-check-report'
+  # =====================================================================
+  # 2) Build + Trivy Scan + Push (dokunulmadı)
+  # =====================================================================
+  - stage: BuildScanPush
+    displayName: "Docker Build + Trivy Scan + Push"
+    dependsOn: StaticAnalysis
+    jobs:
+      - job: BuildScanPushJob
+        displayName: "Build, Scan and Push Image"
+        steps:
+          - checkout: self
 
-# =====================================================================
-# 2) Build + Trivy Scan + Push (dokunulmadı)
-# =====================================================================
-- stage: BuildScanPush
-  displayName: 'Docker Build + Trivy Scan + Push'
-  dependsOn: StaticAnalysis
-  jobs:
-  - job: BuildScanPushJob
-    displayName: 'Build, Scan and Push Image'
-    steps:
-    - checkout: self
+          - script: |
+              IMAGE_NAME=todo-api
+              IMAGE_TAG=$(Build.BuildId)
+              docker build -t $IMAGE_NAME:$IMAGE_TAG ./TodoApi
+            displayName: "Build Docker Image"
 
-    - script: |
-        IMAGE_NAME=todo-api
-        IMAGE_TAG=$(Build.BuildId)
-        docker build -t $IMAGE_NAME:$IMAGE_TAG ./TodoApi
-      displayName: 'Build Docker Image'
+          - script: |
+              IMAGE_NAME=todo-api
+              IMAGE_TAG=$(Build.BuildId)
+              echo "Scanning $IMAGE_NAME:$IMAGE_TAG"
+              trivy image --exit-code 1 --severity CRITICAL,HIGH $IMAGE_NAME:$IMAGE_TAG
+              trivy image --format json --output $(Build.ArtifactStagingDirectory)/trivy-report.json $IMAGE_NAME:$IMAGE_TAG
+            displayName: "Trivy Image Scan - FAIL on CRITICAL/HIGH"
 
-    - script: |
-        IMAGE_NAME=todo-api
-        IMAGE_TAG=$(Build.BuildId)
-        echo "Scanning $IMAGE_NAME:$IMAGE_TAG"
-        trivy image --exit-code 1 --severity CRITICAL,HIGH $IMAGE_NAME:$IMAGE_TAG
-        trivy image --format json --output $(Build.ArtifactStagingDirectory)/trivy-report.json $IMAGE_NAME:$IMAGE_TAG
-      displayName: 'Trivy Image Scan - FAIL on CRITICAL/HIGH'
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish Trivy Report"
+            inputs:
+              PathtoPublish: "$(Build.ArtifactStagingDirectory)/trivy-report.json"
+              ArtifactName: "trivy-report"
 
-    - task: PublishBuildArtifacts@1
-      displayName: 'Publish Trivy Report'
-      inputs:
-        PathtoPublish: '$(Build.ArtifactStagingDirectory)/trivy-report.json'
-        ArtifactName: 'trivy-report'
+          - script: |
+              IMAGE_NAME=todo-api
+              IMAGE_TAG=$(Build.BuildId)
+              echo $(DOCKERHUB_PASSWORD) | docker login -u $(DOCKERHUB_USERNAME) --password-stdin
+              DOCKERHUB_REPO=$(DOCKERHUB_USERNAME)/$IMAGE_NAME
+              docker tag $IMAGE_NAME:$IMAGE_TAG $DOCKERHUB_REPO:$IMAGE_TAG
+              docker push $DOCKERHUB_REPO:$IMAGE_TAG
+            displayName: "Push Docker Image to Docker Hub"
 
-    - script: |
-        IMAGE_NAME=todo-api
-        IMAGE_TAG=$(Build.BuildId)
-        echo $(DOCKERHUB_PASSWORD) | docker login -u $(DOCKERHUB_USERNAME) --password-stdin
-        DOCKERHUB_REPO=$(DOCKERHUB_USERNAME)/$IMAGE_NAME
-        docker tag $IMAGE_NAME:$IMAGE_TAG $DOCKERHUB_REPO:$IMAGE_TAG
-        docker push $DOCKERHUB_REPO:$IMAGE_TAG
-      displayName: 'Push Docker Image to Docker Hub'
+  # =====================================================================
+  # 3) Deploy to Kubernetes (Helm) - no installer
+  # =====================================================================
+  - stage: Deploy
+    displayName: "Helm Upgrade (manifests/)"
+    dependsOn: BuildScanPush
+    condition: succeeded()
+    variables:
+      IMAGE_NAME: "todo-api"
+      IMAGE_TAG: "$(Build.BuildId)"
+      K8S_NAMESPACE: "stage"
+      RELEASE_NAME: "todoapi" # Helm release adı
+      DOCKERHUB_REPO: "$(DOCKERHUB_USERNAME)/$(IMAGE_NAME)"
+    jobs:
+      - job: DeployJob
+        displayName: "Helm Upgrade"
+        steps:
+          - checkout: self
+
+          - task: HelmDeploy@0
+            displayName: "helm upgrade --install"
+            inputs:
+              connectionType: "Kubernetes Service Connection"
+              kubernetesServiceEndpoint: "kub-sc"
+              namespace: "$(K8S_NAMESPACE)"
+              command: "upgrade"
+              chartType: "FilePath"
+              chartPath: "manifests"
+              releaseName: "$(RELEASE_NAME)"
+              install: true
+              arguments: >
+                --set image.repository=$(DOCKERHUB_REPO)
+                --set image.tag=$(IMAGE_TAG)
