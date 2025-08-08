@@ -31,10 +31,10 @@ stages:
                 /d:sonar.qualitygate.wait=false
             displayName: "SonarQube Begin"
 
-          # - script: |
-          #     dotnet restore ./TodoApi.sln
-          #     dotnet build ./TodoApi.sln --configuration Release --no-restore
-          #   displayName: 'DotNet Build'
+          - script: |
+              dotnet restore ./TodoApi.sln
+              dotnet build ./TodoApi.sln --configuration Release --no-restore
+            displayName: 'DotNet Build'
 
           - script: |
               dotnet-sonarscanner end /d:sonar.login="$(SONAR_TOKEN)"
