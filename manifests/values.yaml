@@ -71,15 +71,8 @@ ingress:
   enabled: false
 #   className: "alb"
 #   annotations:
-#     kubernetes.io/ingress.class: alb
-#     alb.ingress.kubernetes.io/scheme: internet-facing
-#     alb.ingress.kubernetes.io/target-type: ip
-#     alb.ingress.kubernetes.io/group.name: "mindbricks-backend-group-ingress"
-#     alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-#     alb.ingress.kubernetes.io/ssl-redirect: '443'
-#     alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-2:455385744192:certificate/ce1c0ccb-29f6-4d54-aa33-c7311f98d66a
 #   hosts:
-#     - host: stage.mindbricks.com
+#     - host: stage.blabla.com
 #       paths:
 #         - path: /api/preview-manager
 #           pathType: Prefix

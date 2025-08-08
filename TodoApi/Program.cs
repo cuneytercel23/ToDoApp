@@ -25,11 +25,14 @@ app.MapScalarApiReference(options =>
 app.MapGet("/", () => Results.Ok(new { status = "ok" }));
 
 // LISTE
-app.MapGet("/todos", async () =>
+app.MapGet("/todos", async (ILogger<Program> logger) =>
 {
+    logger.LogInformation("GET /todos isteği geldi");
+
     await using var conn = new NpgsqlConnection(cs);
     var items = await conn.QueryAsync<Todo>(
         "SELECT id, title, is_done AS IsDone FROM todos ORDER BY id");
+
     return Results.Ok(items);
 });
 
