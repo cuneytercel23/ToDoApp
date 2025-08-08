@@ -20,13 +20,10 @@ stages:
     steps:
     - checkout: self
 
-    - task: Kubernetes@1
-      displayName: "List Kubernetes Nodes"
-      inputs:
-        connectionType: 'Kubernetes Service Connection'
-        kubernetesServiceEndpoint: 'kub-sc'
-        command: 'get'
-        arguments: 'nodes -o wide'
+    - script: |
+        dotnet restore ./TodoApi.sln
+        dotnet build ./TodoApi.sln --configuration Release --no-restore
+      displayName: 'DotNet Build'
 
     # OWASP Dependency-Check
     - script: |
